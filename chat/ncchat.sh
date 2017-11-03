@@ -167,7 +167,7 @@ serve() {
   ncat -m 10 -v -k -l -p $port -c $0  &
   mkdir $home_dir
   mkdir $user_dir
-  echo "You is server, great./n Options for controlling: USERS|KICK|LOGIN|LOGOUT|EXIT|KICK"
+  echo "You is server, great./n Options for controlling: USERS|KICK|LOGIN|LOGOUT|EXIT"
   while true;
   do
     read servcommand
@@ -282,7 +282,7 @@ then
       sleep 5
       if [[ $votes -lt $( cat votes.txt | sort | tail -1 | cut -d ' ' -f 1 ) ]]; then
         #connect to the server
-        
+        sleep 4
         ncat $(cat votes.txt | sort | tail -1 | cut -d ' ' -f 2) $port
 
       else
@@ -319,3 +319,5 @@ done
 
 kill $(ps aux | grep 'ncat' | awk '{print $2}') 2>/dev/null
 kill $(ps aux | grep '$0' | awk '{print $2}')   2>/dev/null
+kill $(ps aux | grep 'tail' | awk '{print $2}')   2>/dev/null
+
