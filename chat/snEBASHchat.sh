@@ -11,6 +11,7 @@ user_dir=/tmp/chat/users
 default_server="188.130.155.41"
 echo "" > voting.txt
 
+[ ! -e "$(which ncat)" ] && (echo "ncat is not installed.. cannot continue"; exit 1)
 ncat -m 10 -l -k -v -p $votingport >> voting.txt &
 
 control_c() {
@@ -20,7 +21,6 @@ trap control_c SIGINT
 
 
 
-[ ! -e "$(which ncat)" ] && (echo "ncat is not installed.. cannot continue"; exit 1)
 
 clear_line() {
   printf '\r\033[2K'
@@ -29,10 +29,6 @@ clear_line() {
 move_cursor_up() {
   printf '\033[1A'
 }
-
-
-
-
 
 
 # login
@@ -50,12 +46,13 @@ lin() {
   fi
   touch $user_dir/$username
   echo "OK"
-  tail --pid $pid -q -f $user_dir/$username&
+  #tail -f -q $user_dir/$username&
+  tail --pid $pid -q -f $user_dir/$username& #does not work for dockerO_o
   return
 }
 
 
-# logout
+# KICK
 kick() {
   username=$1
   rm -f $user_dir/$username
@@ -75,7 +72,6 @@ lout() {
   else
     # cleanup when loggin out
     rm -f $user_dir/$username
-
     username=""
     echo "OK"
     return
@@ -105,11 +101,6 @@ read_input() {
   return
 }
 
-
-
-
-
-
 msg() {
   if [ -z "$username" ]   # check if user is logged-in
   then
@@ -123,22 +114,18 @@ msg() {
   then
     #message=`./stickers/$message` #RCE
     message="`cat ./stickers/$message`"
-
   fi
-
-
 
   for i in $(ls -l $user_dir | awk '{print $9}');
   do
     printf '\033[0;36m%s: \033[0;39m%s\n\r' "$username" "$message"  >> $user_dir/$i
-
   done
 
 
 }
 
 # do something useful
-do_something() {
+use_chat() {
   cleanup
   command="$*"
 
@@ -148,6 +135,16 @@ do_something() {
       username=$(expr match "$username" '\([a-zA-Z0-9]*\)')
       lin $username
       ;;
+    STICKERS*)
+        ls -l ./stickers | awk '{print $9}'
+        ;;
+    EXIT*)
+        
+        kill $(ps aux | grep 'ncat' | awk '{print $2}') 2>/dev/null
+        kill $(ps aux | grep '$0' | awk '{print $2}')   2>/dev/null
+        lout $username
+        exit 0
+    ;;
 
     LOGOUT*)
       lout $username
@@ -167,7 +164,7 @@ serve() {
   ncat -m 10 -v -k -l -p $port -c $0  &
   mkdir $home_dir
   mkdir $user_dir
-  echo "You is server, great./n Options for controlling: USERS|KICK|LOGIN|LOGOUT|EXIT"
+  echo "You is server, great./n/r Options for controlling: USERS|KICK|LOGIN|LOGOUT|EXIT"
   while true;
   do
     read servcommand
@@ -175,6 +172,10 @@ serve() {
       USERS*)
         ls -l $user_dir | awk '{print $9}'
         ;;
+      STICKERS*)
+        ls -l ./stickers | awk '{print $9}'
+        ;;
+
       LOGOUT*)
         lout $username
         exit 0
@@ -188,6 +189,7 @@ serve() {
         lout $username
         kill $(ps aux | grep 'ncat' | awk '{print $2}') 2>/dev/null
         kill $(ps aux | grep '$0' | awk '{print $2}')   2>/dev/null
+        kill $(ps aux | grep 'tail' | awk '{print $2}')   2>/dev/null
         exit 0
         ;;
       KICK*)
@@ -232,6 +234,32 @@ then
     gw=$(ip r | awk '/default/{print$3}')
     echo "my ip is $myip"
     openips=()
+
+    #scanning for a server in a local network
+    echo "Scanning for a server in a local network..."
+    for ip in $(ip a | grep -v "127.0.0.1"| grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}" |grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}" );do
+      ##looking for all clients
+      serv=$(nmap $ip/24 -p $port | grep -B 3 "$port/tcp.*open" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")    
+    done
+
+    tmp1="${serv%$myip}"
+    tmp2="${tmp1#$gw}"
+    serv=$tmp2
+    echo "ip of server $serv"
+    if [[ $(echo $serv | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}" | wc -l) == 1 ]]
+    then
+      echo "Server found, connecting to $serv"
+      kill $(ps aux | grep 'ncat' | awk '{print $2}')   2>/dev/null
+      ncat $serv $port
+      ncat -m 10 -l -k -v -p $votingport >> voting.txt &
+
+    fi
+    #scanning for peers
+    echo "Server not found, scanning for peers"
+
+
+
+    #scanning for peers
     for ip in $(ip a | grep -v "127.0.0.1"| grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}" |grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}" );do
 
       echo $ip
@@ -240,10 +268,18 @@ then
      
     done
 
-    ##TODO: delete myip and gw
+    ##delete myip and gw from scan
     tmp1="${openips%$myip}"
     tmp2="${tmp1#$gw}"
     openips=$tmp2
+    #if only one server
+    if [[ $(echo $openips | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}" | wc -l) == 1 ]]
+    then
+      echo "found only one server"
+      ncat $openips $port
+      
+    fi
+
     #openips+="188.130.155.41"
     echo "Found this open IP: $openips"
     if [ "$openips" ]; then
@@ -274,13 +310,13 @@ then
 
       myip=$(ip a | grep -v "127.0.0.1"| grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}"  -m 1)
       echo "my ip is $myip"
-
+      # anouncing the number of my votes
       for i in ${openips[*]}; do
         echo "$votes $myip" | ncat $i $countingport &
       done
       echo "calculating result..."
       sleep 5
-      if [[ $votes -lt $( cat votes.txt | sort | tail -1 | cut -d ' ' -f 1 ) ]]; then
+      if [[ $votes -lt $( cat votes.txt | sort | tail -1 | cut -d ' ' -f 1 ) ]]; then # if my votes less than someone in ht file - connect
         #connect to the server
         sleep 4
         ncat $(cat votes.txt | sort | tail -1 | cut -d ' ' -f 2) $port
@@ -288,13 +324,6 @@ then
       else
         serve
       fi
-
-
-
-
-
-
-
     else
       serve
     fi
@@ -307,14 +336,13 @@ else
 fi
 
 
-# Run Forest, run!
+
 welcome_screen
-
+echo "You is client. /n/r Options for controlling: LOGIN [username]|LOGOUT|EXIT"
 while true; do
-
   read servcommand
   [ ! -z "$debug" ] && echo "debug: $servcommand"
-  do_something "$servcommand"
+  use_chat "$servcommand"
 done
 
 kill $(ps aux | grep 'ncat' | awk '{print $2}') 2>/dev/null
