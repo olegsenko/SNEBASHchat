@@ -136,15 +136,15 @@ use_chat() {
       lin $username
       ;;
     STICKERS*)
-        ls -l ./stickers | awk '{print $9}'
-        ;;
+      ls -l ./stickers | awk '{print $9}'
+      ;;
     EXIT*)
-        
-        kill $(ps aux | grep 'ncat' | awk '{print $2}') 2>/dev/null
-        kill $(ps aux | grep '$0' | awk '{print $2}')   2>/dev/null
-        lout $username
-        exit 0
-    ;;
+
+      kill $(ps aux | grep 'ncat' | awk '{print $2}') 2>/dev/null
+      kill $(ps aux | grep '$0' | awk '{print $2}')   2>/dev/null
+      lout $username
+      exit 0
+      ;;
 
     LOGOUT*)
       lout $username
@@ -239,7 +239,7 @@ then
     echo "Scanning for a server in a local network..."
     for ip in $(ip a | grep -v "127.0.0.1"| grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}" |grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}" );do
       ##looking for all clients
-      serv=$(nmap $ip/24 -p $port | grep -B 3 "$port/tcp.*open" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")    
+      serv=$(nmap $ip/24 -p $port | grep -B 3 "$port/tcp.*open" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")
     done
 
     tmp1="${serv%$myip}"
@@ -264,8 +264,8 @@ then
 
       echo $ip
       openips+=$(nmap -T5 $ip/24 -p $votingport | grep -B 3 "$votingport/tcp.*[open|filtered]" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")
-      
-     
+
+
     done
 
     ##delete myip and gw from scan
@@ -277,7 +277,7 @@ then
     then
       echo "found only one server"
       ncat $openips $port
-      
+
     fi
 
     #openips+="188.130.155.41"
